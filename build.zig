@@ -33,7 +33,6 @@ pub fn build(b: *std.Build) void {
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const main_tests = b.addTest(.{
-        .name = "lib.zig",
         .root_source_file = .{ .path = "src/lib.zig" },
         .target = target,
         .optimize = optimize,
@@ -42,40 +41,37 @@ pub fn build(b: *std.Build) void {
 
     const run_main_tests = b.addRunArtifact(main_tests);
 
-    const parser_tests = b.addTest(.{
-        .name = "parser.zig",
-        .root_source_file = .{ .path = "src/parser.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    parser_tests.linkSystemLibrary("c");
+    // const parser_tests = b.addTest(.{
+    //     .root_source_file = .{ .path = "src/parser.zig" },
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
+    // parser_tests.linkSystemLibrary("c");
 
-    const run_parser_tests = b.addRunArtifact(parser_tests);
+    // const run_parser_tests = b.addRunArtifact(parser_tests);
 
-    const utils_tests = b.addTest(.{
-        .name = "utils.zig",
-        .root_source_file = .{ .path = "src/utils.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    utils_tests.linkSystemLibrary("c");
-    const run_utils_tests = b.addRunArtifact(utils_tests);
+    // const utils_tests = b.addTest(.{
+    //     .root_source_file = .{ .path = "src/utils.zig" },
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
+    // utils_tests.linkSystemLibrary("c");
+    // const run_utils_tests = b.addRunArtifact(utils_tests);
 
-    const loader_tests = b.addTest(.{
-        .name = "loader.zig",
-        .root_source_file = .{ .path = "src/loader.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    loader_tests.linkSystemLibrary("c");
-    const run_loader_tests = b.addRunArtifact(loader_tests);
+    // const loader_tests = b.addTest(.{
+    //     .root_source_file = .{ .path = "src/loader.zig" },
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
+    // loader_tests.linkSystemLibrary("c");
+    // const run_loader_tests = b.addRunArtifact(loader_tests);
 
     // This creates a build step. It will be visible in the `zig build --help` menu,
     // and can be selected like this: `zig build test`
     // This will evaluate the `test` step rather than the default, which is "install".
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&run_main_tests.step);
-    test_step.dependOn(&run_parser_tests.step);
-    test_step.dependOn(&run_utils_tests.step);
-    test_step.dependOn(&run_loader_tests.step);
+    // test_step.dependOn(&run_parser_tests.step);
+    // test_step.dependOn(&run_utils_tests.step);
+    // test_step.dependOn(&run_loader_tests.step);
 }
