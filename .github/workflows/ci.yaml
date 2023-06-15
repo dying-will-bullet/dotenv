@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Tests on Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: goto-bus-stop/setup-zig@v2
+      - uses: Hanaasagi/zig-action-cache@v1.1.2
+        with:
+          cache-on-failure: true
+      - run: zig version
+      - run: zig env
+      - run: rm -rf zig-cache/o/*/test || echo 'failed to remove'
+      - name: Build
+        run: zig build --verbose
+      - name: Run Tests
+        run: zig build test
+      - name: Install kcov
+        run: sudo apt-get install -y kcov
+      - name: Generate coverage
+        run: kcov $PWD/kcov-out ./zig-cache/o/*/test
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./kcov-out/test
+          verbose: true
+          fail_ci_if_error: true
