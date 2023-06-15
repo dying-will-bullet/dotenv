@@ -15,10 +15,10 @@ const Options = @import("./loader.zig").Options;
 /// Where multiple declarations for the same environment variable exist in `.env`
 /// file, the *first one* will be applied.
 pub fn load(allocator: std.mem.Allocator, options: Options) !void {
-    var finder = FileFinder;
+    var finder = FileFinder.default();
     const path = try finder.find(allocator);
 
-    try loadFrom(path, options);
+    try loadFrom(allocator, path, options);
 }
 
 /// Loads the `.env*` file from the given path.
@@ -67,4 +67,8 @@ test "test load real file" {
         std.os.getenv("CODEGEN_TEST_MULTILINE2").?,
         "# First Line Comment\nSecond Line\n#Third Line Comment\nFourth Line\n",
     );
+}
+
+test {
+    std.testing.refAllDecls(@This());
 }
