@@ -50,7 +50,17 @@ pub fn Loader(comptime options: Options) type {
             return &self.parser.ctx;
         }
 
-        pub fn load(self: *Self, reader: anytype) !void {
+        pub fn loadFromFile(self: *Self, path: []const u8) !void {
+            var f = try std.fs.cwd().openFile(path, .{});
+            defer f.close();
+
+            var br = std.io.bufferedReader(f.reader());
+            var reader = br.reader();
+
+            return try self.loadFromStream(reader);
+        }
+
+        pub fn loadFromStream(self: *Self, reader: anytype) !void {
             while (true) {
                 // read a logical line.
                 const line = try self.readLine(reader);
@@ -239,7 +249,7 @@ test "test load" {
 
     var loader = Loader(.{}).init(allocator);
     defer loader.deinit();
-    try loader.load(reader);
+    try loader.loadFromStream(reader);
 
     try testing.expectEqualStrings(loader.envs().get("KEY0").?.?, "0");
     try testing.expectEqualStrings(loader.envs().get("KEY1").?.?, "1");
@@ -268,7 +278,7 @@ test "test multiline" {
 
     var loader = Loader(.{}).init(allocator);
     defer loader.deinit();
-    try loader.load(reader);
+    try loader.loadFromStream(reader);
 
     try testing.expectEqualStrings(loader.envs().get("C").?.?, "F\nS");
 }
@@ -284,7 +294,7 @@ test "test not override" {
 
     var loader = Loader(.{ .override = false }).init(allocator);
     defer loader.deinit();
-    try loader.load(reader);
+    try loader.loadFromStream(reader);
 
     const r = std.os.getenv("HOME");
     try testing.expect(!std.mem.eql(u8, r.?, "/home/nayuta"));
@@ -301,7 +311,7 @@ test "test override" {
 
     var loader = Loader(.{ .override = true }).init(allocator);
     defer loader.deinit();
-    try loader.load(reader);
+    try loader.loadFromStream(reader);
 
     const r = std.os.getenv("HOME");
     try testing.expect(std.mem.eql(u8, r.?, "/home/nayuta"));

@@ -25,16 +25,10 @@ pub fn load(allocator: std.mem.Allocator, comptime options: Options) !void {
 
 /// Loads the `.env` file from the given path.
 pub fn loadFrom(allocator: std.mem.Allocator, path: []const u8, comptime options: Options) !void {
-    var f = try std.fs.cwd().openFile(path, .{});
-    defer f.close();
-
-    var br = std.io.bufferedReader(f.reader());
-    var reader = br.reader();
-
     var loader = Loader(options).init(allocator);
     defer loader.deinit();
 
-    try loader.load(reader);
+    try loader.loadFromFile(path);
 }
 
 test "test load real file" {
