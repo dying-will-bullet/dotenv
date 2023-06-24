@@ -1,0 +1,3 @@
+VAR1="hello"
+VAR2="world"
+VAR3="${VAR1} ${VAR2}"
