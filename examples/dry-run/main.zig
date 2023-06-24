@@ -1,5 +1,5 @@
 const std = @import("std");
-const Loader = @import("dotenv").Loader;
+const dotenv = @import("dotenv");
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
@@ -9,10 +9,7 @@ pub fn main() !void {
         .{std.os.getenv("HOME") orelse ""},
     );
 
-    var loader = Loader(.{ .dry_run = true }).init(allocator);
-    defer loader.deinit();
-
-    try loader.loadFromFile(".env3");
+    var envs = try dotenv.getDataFrom(allocator, "./.env3");
 
     std.debug.print(
         "After  => HOME={s}\n",
@@ -22,7 +19,7 @@ pub fn main() !void {
     std.debug.print("Process envs have not been modified!\n\n", .{});
     std.debug.print("Now list envs from the file:\n", .{});
 
-    var it = loader.envs().iterator();
+    var it = envs.iterator();
     while (it.next()) |*entry| {
         std.debug.print(
             "{s}={s}\n",

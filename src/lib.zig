@@ -31,6 +31,21 @@ pub fn loadFrom(allocator: std.mem.Allocator, path: []const u8, comptime options
     try loader.loadFromFile(path);
 }
 
+pub fn getData(allocator: std.mem.Allocator) !std.StringHashMap(?[]const u8) {
+    var finder = FileFinder.default();
+    const path = try finder.find(allocator);
+
+    return getDataFrom(allocator, path);
+}
+
+pub fn getDataFrom(allocator: std.mem.Allocator, path: []const u8) !std.StringHashMap(?[]const u8) {
+    var loader = Loader(.{ .dry_run = true }).init(allocator);
+    defer loader.deinit();
+
+    try loader.loadFromFile(path);
+    return loader.envs().move();
+}
+
 test "test load real file" {
     try testing.expect(std.os.getenv("VAR1") == null);
     try testing.expect(std.os.getenv("VAR2") == null);

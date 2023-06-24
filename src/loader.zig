@@ -46,7 +46,7 @@ pub fn Loader(comptime options: Options) type {
             self.parser.deinit();
         }
 
-        pub fn envs(self: *Self) *const std.StringHashMap(?[]const u8) {
+        pub fn envs(self: *Self) *std.StringHashMap(?[]const u8) {
             return &self.parser.ctx;
         }
 
@@ -74,6 +74,7 @@ pub fn Loader(comptime options: Options) type {
                 }
 
                 if (options.dry_run) {
+                    self.allocator.free(line.?);
                     continue;
                 }
 
@@ -315,4 +316,31 @@ test "test override" {
 
     const r = std.os.getenv("HOME");
     try testing.expect(std.mem.eql(u8, r.?, "/home/nayuta"));
+}
+
+test "test ownership" {
+    const allocator = testing.allocator;
+    const input =
+        \\HOME=/home/korone
+    ;
+
+    var fbs = std.io.fixedBufferStream(input);
+    var reader = fbs.reader();
+
+    var loader = Loader(.{ .dry_run = true }).init(allocator);
+    try loader.loadFromStream(reader);
+
+    var envs = loader.envs().move();
+    loader.deinit();
+
+    try testing.expect(std.mem.eql(u8, envs.get("HOME").?.?, "/home/korone"));
+
+    var it = envs.iterator();
+    while (it.next()) |*entry| {
+        allocator.free(entry.key_ptr.*);
+        if (entry.value_ptr.* != null) {
+            allocator.free(entry.value_ptr.*.?);
+        }
+    }
+    envs.deinit();
 }
