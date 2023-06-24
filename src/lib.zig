@@ -1,8 +1,8 @@
 const std = @import("std");
 const testing = std.testing;
 const FileFinder = @import("./utils.zig").FileFinder;
-const Loader = @import("./loader.zig").Loader;
 
+pub const Loader = @import("./loader.zig").Loader;
 /// Control loading behavior
 pub const Options = @import("./loader.zig").Options;
 
