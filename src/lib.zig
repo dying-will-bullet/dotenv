@@ -2,7 +2,9 @@ const std = @import("std");
 const testing = std.testing;
 const FileFinder = @import("./utils.zig").FileFinder;
 const Loader = @import("./loader.zig").Loader;
-const Options = @import("./loader.zig").Options;
+
+/// Control loading behavior
+pub const Options = @import("./loader.zig").Options;
 
 /// Loads the `.env*` file from the current directory or parents.
 ///
@@ -31,6 +33,7 @@ pub fn loadFrom(allocator: std.mem.Allocator, path: []const u8, options: Options
 
     var loader = Loader.init(allocator, options);
     defer loader.deinit();
+
     try loader.load(reader);
 }
 
