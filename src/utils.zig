@@ -4,6 +4,9 @@ const testing = std.testing;
 /// libc setenv
 pub extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
 
+/// Default File name
+const default_file_name = ".env";
+
 /// Use to find an env file starting from the current directory and going upwards.
 pub const FileFinder = struct {
     filename: []const u8,
@@ -18,13 +21,14 @@ pub const FileFinder = struct {
 
     /// Default filename is `.env`
     pub fn default() Self {
-        return Self.init(".env");
+        return Self.init(default_file_name);
     }
 
     /// Find the file and return absolute path.
     /// The return value should be freed by caller.
     pub fn find(self: Self, allocator: std.mem.Allocator) ![]const u8 {
-        var buf: [64]u8 = undefined;
+        // TODO: allocator?
+        var buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
         const cwd = try std.process.getCwd(&buf);
 
         const path = try Self.recursiveFind(allocator, cwd, self.filename);
