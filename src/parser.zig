@@ -1,6 +1,7 @@
 const std = @import("std");
-const testing = std.testing;
 const Error = @import("./error.zig").Error;
+
+const testing = std.testing;
 
 const SubstitutionMode = enum {
     none,
@@ -162,6 +163,7 @@ pub const LineParser = struct {
                                 substitution_mode = .escaped_block;
                             } else {
                                 try applySubstitution(&self.ctx, name_buf.items, output);
+                                name_buf.clearRetainingCapacity();
                                 if (c == '$') {
                                     if (!strong_quote and !escaped) {
                                         substitution_mode = .block;
@@ -178,6 +180,7 @@ pub const LineParser = struct {
                             if (c == '}') {
                                 substitution_mode = .none;
                                 try applySubstitution(&self.ctx, name_buf.items, output);
+                                name_buf.clearRetainingCapacity();
                             } else {
                                 try substitution_name.writeByte(c);
                             }
@@ -215,6 +218,7 @@ pub const LineParser = struct {
             return Error.InvalidValue;
         } else {
             try applySubstitution(&self.ctx, name_buf.items, output);
+            name_buf.clearRetainingCapacity();
             return output_buf.toOwnedSlice();
         }
     }
@@ -284,6 +288,7 @@ test "test parse" {
         \\KEY7=   # foo
         \\KEY8  ="whitespace before ="
         \\KEY9=    "whitespace after ="
+        \\KEY10=${KEY0}?${KEY1}
     ;
 
     const expect = [_]?[]const u8{
@@ -297,6 +302,7 @@ test "test parse" {
         null,
         "whitespace before =",
         "whitespace after =",
+        "0?1",
     };
 
     var parser = LineParser.init(allocator);
@@ -320,7 +326,7 @@ test "test parse" {
             try testing.expect(value == null);
         } else {
             const value = parser.ctx.get(key).?.?;
-            try testing.expectEqualStrings(value, expect[i].?);
+            try testing.expectEqualStrings(expect[i].?, value);
         }
 
         i += 1;
