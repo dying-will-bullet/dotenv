@@ -2,6 +2,7 @@ const std = @import("std");
 const testing = std.testing;
 const parser = @import("./parser.zig");
 const setenv = @import("./utils.zig").setenv;
+const toCString = @import("./utils.zig").toCString;
 
 const Error = error{
     LineParseError,
@@ -12,21 +13,6 @@ const Error = error{
 pub const Options = struct {
     override: bool = false,
 };
-
-// https://github.com/ziglang/zig/wiki/Zig-Newcomer-Programming-FAQs#converting-from-t-to-0t
-fn toCString(str: []const u8) ![std.fs.MAX_PATH_BYTES - 1:0]u8 {
-    if (std.debug.runtime_safety) {
-        std.debug.assert(std.mem.indexOfScalar(u8, str, 0) == null);
-    }
-    var path_with_null: [std.fs.MAX_PATH_BYTES - 1:0]u8 = undefined;
-
-    if (str.len >= std.fs.MAX_PATH_BYTES) {
-        return error.NameTooLong;
-    }
-    @memcpy(path_with_null[0..str.len], str);
-    path_with_null[str.len] = 0;
-    return path_with_null;
-}
 
 pub const Loader = struct {
     allocator: std.mem.Allocator,
