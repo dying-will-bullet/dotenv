@@ -15,6 +15,11 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    _ = b.addModule("dotenv", .{
+        .source_file = .{ .path = "src/lib.zig" },
+        .dependencies = &.{},
+    });
+
     const lib = b.addStaticLibrary(.{
         .name = "dotenv",
         // In this case the main source file is merely a path, however, in more
