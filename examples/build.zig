@@ -6,7 +6,7 @@ const pkg_path = "../src/lib.zig";
 const examples = .{
     "basic",
     "substitution",
-    "multiline",
+    "dry-run",
 };
 
 pub fn build(b: *std.build.Builder) void {
