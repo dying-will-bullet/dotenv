@@ -16,22 +16,22 @@ pub const Options = @import("./loader.zig").Options;
 ///
 /// Where multiple declarations for the same environment variable exist in `.env`
 /// file, the *first one* will be applied.
-pub fn load(allocator: std.mem.Allocator, options: Options) !void {
+pub fn load(allocator: std.mem.Allocator, comptime options: Options) !void {
     var finder = FileFinder.default();
     const path = try finder.find(allocator);
 
     try loadFrom(allocator, path, options);
 }
 
-/// Loads the `.env*` file from the given path.
-pub fn loadFrom(allocator: std.mem.Allocator, path: []const u8, options: Options) !void {
+/// Loads the `.env` file from the given path.
+pub fn loadFrom(allocator: std.mem.Allocator, path: []const u8, comptime options: Options) !void {
     var f = try std.fs.cwd().openFile(path, .{});
     defer f.close();
 
     var br = std.io.bufferedReader(f.reader());
     var reader = br.reader();
 
-    var loader = Loader.init(allocator, options);
+    var loader = Loader(options).init(allocator);
     defer loader.deinit();
 
     try loader.load(reader);
