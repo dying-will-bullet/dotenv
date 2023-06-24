@@ -162,7 +162,7 @@ pub const LineParser = struct {
                             if (c == '{' and name_buf.items.len == 0) {
                                 substitution_mode = .escaped_block;
                             } else {
-                                try applySubstitution(&self.ctx, name_buf.items, output);
+                                try substitute_variables(&self.ctx, name_buf.items, output);
                                 name_buf.clearRetainingCapacity();
                                 if (c == '$') {
                                     if (!strong_quote and !escaped) {
@@ -179,7 +179,7 @@ pub const LineParser = struct {
                         .escaped_block => {
                             if (c == '}') {
                                 substitution_mode = .none;
-                                try applySubstitution(&self.ctx, name_buf.items, output);
+                                try substitute_variables(&self.ctx, name_buf.items, output);
                                 name_buf.clearRetainingCapacity();
                             } else {
                                 try substitution_name.writeByte(c);
@@ -217,7 +217,7 @@ pub const LineParser = struct {
         if (substitution_mode == .escaped_block or strong_quote or weak_quote) {
             return Error.InvalidValue;
         } else {
-            try applySubstitution(&self.ctx, name_buf.items, output);
+            try substitute_variables(&self.ctx, name_buf.items, output);
             name_buf.clearRetainingCapacity();
             return output_buf.toOwnedSlice();
         }
@@ -240,6 +240,8 @@ pub const LineParser = struct {
         if (std.mem.eql(u8, key, "export")) {
             // here we check for an optional `=`, below we throw directly when it’s not found.
             self.expectEqual() catch {
+                self.allocator.free(key);
+
                 key = try self.parseKey();
                 self.skipWhitespace();
                 try self.expectEqual();
@@ -262,7 +264,10 @@ pub const LineParser = struct {
     }
 };
 
-fn applySubstitution(
+/// handle `KEY=${KEY_XXX}`
+/// First, search `KEY_XXX` from the environment variables,
+/// and then from the context.
+fn substitute_variables(
     ctx: *std.StringHashMap(?[]const u8),
     name: []const u8,
     output: anytype,
@@ -289,6 +294,7 @@ test "test parse" {
         \\KEY8  ="whitespace before ="
         \\KEY9=    "whitespace after ="
         \\KEY10=${KEY0}?${KEY1}
+        \\export KEY11=tmux-256color
     ;
 
     const expect = [_]?[]const u8{
@@ -303,6 +309,7 @@ test "test parse" {
         "whitespace before =",
         "whitespace after =",
         "0?1",
+        "tmux-256color",
     };
 
     var parser = LineParser.init(allocator);
