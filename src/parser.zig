@@ -1,10 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
-
-const Error = error{
-    InvalidKey,
-    InvalidValue,
-};
+const Error = @import("./error.zig").Error;
 
 const SubstitutionMode = enum {
     none,

@@ -1,17 +1,27 @@
 const std = @import("std");
-const testing = std.testing;
 const parser = @import("./parser.zig");
 const setenv = @import("./utils.zig").setenv;
 const toCString = @import("./utils.zig").toCString;
+const Error = @import("./error.zig").Error;
 
-const Error = error{
-    LineParseError,
-    EINVAL,
-    ENOMEM,
-};
+const testing = std.testing;
 
 pub const Options = struct {
+    /// override existed env value, default `false`
     override: bool = false,
+    /// read and collect environment variables, but do not write them to the environment.
+    dry_run: bool = false,
+};
+
+const ParseState = enum {
+    complete,
+    escape,
+    strong_open,
+    strong_open_escape,
+    weak_open,
+    weak_open_escape,
+    comment,
+    whitespace,
 };
 
 pub const Loader = struct {
@@ -20,6 +30,10 @@ pub const Loader = struct {
     options: Options,
 
     const Self = @This();
+
+    // --------------------------------------------------------------------------------
+    //                                  Public API
+    // --------------------------------------------------------------------------------
 
     pub fn init(allocator: std.mem.Allocator, options: Options) Self {
         return Self{
@@ -33,19 +47,24 @@ pub const Loader = struct {
         self.parser.deinit();
     }
 
-    pub fn envs(self: Self) std.StringHashMap(?[]const u8) {
-        return self.parser.ctx;
+    pub fn envs(self: *Self) *const std.StringHashMap(?[]const u8) {
+        return &self.parser.ctx;
     }
 
     pub fn load(self: *Self, reader: anytype) !void {
         while (true) {
-            const line = try Self.readLine(self.allocator, reader);
+            // read a logical line.
+            const line = try self.readLine(reader);
             if (line == null) {
                 return;
             }
 
             const result = try self.parser.parseLine(line.?);
             if (result == null) {
+                continue;
+            }
+
+            if (self.options.dry_run) {
                 continue;
             }
 
@@ -64,47 +83,66 @@ pub const Loader = struct {
 
             if (err_code != 0) {
                 switch (err_code) {
-                    22 => return Error.EINVAL,
-                    12 => return Error.EINVAL,
+                    22 => return Error.InvalidValue,
+                    12 => return error.OutOfMemory,
                     else => unreachable,
                 }
             }
         }
     }
 
-    fn readLine(allocator: std.mem.Allocator, reader: anytype) !?[]const u8 {
+    // --------------------------------------------------------------------------------
+    //                                  Core API
+    // --------------------------------------------------------------------------------
+
+    /// Read a logical line.
+    /// Multiple lines enclosed in quotation marks are considered as a single line.
+    /// e.g.
+    /// ```
+    /// a = "Line1
+    /// Line2"
+    /// ```
+    /// It will be returned as a single line.
+    fn readLine(self: Self, reader: anytype) !?[]const u8 {
         var cur_state: ParseState = ParseState.complete;
         var buf_pos: usize = undefined;
         var cur_pos: usize = undefined;
 
-        var buf = std.ArrayList(u8).init(allocator);
+        var buf = std.ArrayList(u8).init(self.allocator);
         defer buf.deinit();
 
-        while (reader.readUntilDelimiterOrEofAlloc(allocator, '\n', 1024)) |data| {
+        // TODO: line size
+        // someone may use JSON text as the value for the env var.
+        var line_buf: [1024]u8 = undefined;
+        while (reader.readUntilDelimiterOrEof(&line_buf, '\n')) |data| {
             buf_pos = buf.items.len;
             if (data == null) {
                 if (cur_state == .complete) {
                     return null;
                 } else {
-                    return Error.LineParseError;
+                    return Error.ParseError;
                 }
             } else {
-                defer allocator.free(data.?);
                 if (data.?.len == 0) {
                     continue;
                 }
 
-                // // resotre newline
                 try buf.appendSlice(data.?);
+                // resotre newline
                 try buf.append('\n');
 
-                // TODO: strim more whitespce
-                if (std.mem.startsWith(u8, std.mem.trimLeft(u8, buf.items, " "), "#")) {
+                if (std.mem.startsWith(u8, std.mem.trimLeft(
+                    u8,
+                    buf.items,
+                    // ASCII Whitespace
+                    &[_]u8{ ' ', '\x09', '\x0a', '\x0b', '\x0c', '\x0d' },
+                ), "#")) {
                     return "";
                 }
-                const result = evalEndState(cur_state, buf.items[buf_pos..]);
-                cur_pos = result.pos;
-                cur_state = result.state;
+
+                const result = nextState(cur_state, buf.items[buf_pos..]);
+                cur_pos = result.new_pos;
+                cur_state = result.new_state;
 
                 switch (cur_state) {
                     .complete => {
@@ -117,43 +155,22 @@ pub const Loader = struct {
                         return try buf.toOwnedSlice();
                     },
                     .comment => {
+                        // truncate
                         try buf.resize(buf_pos + cur_pos);
                         return try buf.toOwnedSlice();
                     },
-                    else => {},
+                    else => {
+                        //  do nothing
+                    },
                 }
             }
         } else |err| {
-            // TODO:?
-            // if (err == error.EndOfStream) {
-            //     if (cur_state == .complete) {
-            //         return null;
-            //     } else {
-            //         return Error.LineParseError;
-            //     }
-            // }
             return err;
         }
     }
 };
 
-const ParseState = enum {
-    complete,
-    escape,
-    strong_open,
-    strong_open_escape,
-    weak_open,
-    weak_open_escape,
-    comment,
-    whitespace,
-};
-
-const State = struct {
-    pos: usize,
-    state: ParseState,
-};
-
-fn evalEndState(prev_state: ParseState, buf: []const u8) State {
+fn nextState(prev_state: ParseState, buf: []const u8) struct { new_pos: usize, new_state: ParseState } {
     var cur_state = prev_state;
     var cur_pos: usize = 0;
 
@@ -161,7 +178,7 @@ fn evalEndState(prev_state: ParseState, buf: []const u8) State {
         cur_pos = pos;
         cur_state = switch (cur_state) {
             .whitespace => switch (c) {
-                '#' => return State{ .pos = cur_pos, .state = .comment },
+                '#' => return .{ .new_pos = cur_pos, .new_state = .comment },
                 '\\' => .escape,
                 '"' => .weak_open,
                 '\'' => .strong_open,
@@ -196,9 +213,9 @@ fn evalEndState(prev_state: ParseState, buf: []const u8) State {
         };
     }
 
-    return State{
-        .pos = cur_pos,
-        .state = cur_state,
+    return .{
+        .new_pos = cur_pos,
+        .new_state = cur_state,
     };
 }
 
