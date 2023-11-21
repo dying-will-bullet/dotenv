@@ -19,6 +19,7 @@ pub const Options = @import("./loader.zig").Options;
 pub fn load(allocator: std.mem.Allocator, comptime options: Options) !void {
     var finder = FileFinder.default();
     const path = try finder.find(allocator);
+    defer allocator.free(path);
 
     try loadFrom(allocator, path, options);
 }
@@ -79,6 +80,8 @@ test "test load real file" {
         std.os.getenv("MULTILINE2").?,
         "# First Line Comment\nSecond Line\n#Third Line Comment\nFourth Line\n",
     );
+
+    // try load(testing.allocator, .{});
 }
 
 test {
