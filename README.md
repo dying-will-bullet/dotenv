@@ -10,6 +10,8 @@ Storing configuration in the environment separate from code is based on The
 
 This library is a Zig language port of [nodejs dotenv](https://github.com/motdotla/dotenv).
 
+Test with Zig 0.12.0-dev.1664+8ca4a5240.
+
 ## Quick Start
 
 Automatically find the `.env` file and load the variables into the process environment with just one line.
@@ -103,12 +105,12 @@ Add `dotenv` as dependency in `build.zig.zon`:
     .version = "0.1.0",
     .dependencies = .{
        .dotenv = .{
-           .url = "https://github.com/dying-will-bullet/dotenv/archive/refs/tags/v0.1.0.tar.gz",
-           .hash = "1220c77566ceedb0a89844ac490c1afe9c5e396818680e73e4a2e8dcadd9ac896724",
+           .url = "https://github.com/dying-will-bullet/dotenv/archive/refs/tags/v0.1.1.tar.gz",
+           .hash = "1220f0f6736020856641d3644ef44f95ce21f3923d5dae7f9ac8658187574d36bcb8"
        },
     },
+    .paths = .{""}
 }
-
 ```
 
 Add `dotenv` as a module in `build.zig`:
