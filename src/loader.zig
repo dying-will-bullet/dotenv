@@ -55,7 +55,7 @@ pub fn Loader(comptime options: Options) type {
             defer f.close();
 
             var br = std.io.bufferedReader(f.reader());
-            var reader = br.reader();
+            const reader = br.reader();
 
             return try self.loadFromStream(reader);
         }
@@ -246,7 +246,7 @@ test "test load" {
     ;
 
     var fbs = std.io.fixedBufferStream(input);
-    var reader = fbs.reader();
+    const reader = fbs.reader();
 
     var loader = Loader(.{}).init(allocator);
     defer loader.deinit();
@@ -275,7 +275,7 @@ test "test multiline" {
     ;
 
     var fbs = std.io.fixedBufferStream(input);
-    var reader = fbs.reader();
+    const reader = fbs.reader();
 
     var loader = Loader(.{}).init(allocator);
     defer loader.deinit();
@@ -291,7 +291,7 @@ test "test not override" {
     ;
 
     var fbs = std.io.fixedBufferStream(input);
-    var reader = fbs.reader();
+    const reader = fbs.reader();
 
     var loader = Loader(.{ .override = false }).init(allocator);
     defer loader.deinit();
@@ -308,7 +308,7 @@ test "test override" {
     ;
 
     var fbs = std.io.fixedBufferStream(input);
-    var reader = fbs.reader();
+    const reader = fbs.reader();
 
     var loader = Loader(.{ .override = true }).init(allocator);
     defer loader.deinit();
@@ -325,7 +325,7 @@ test "test ownership" {
     ;
 
     var fbs = std.io.fixedBufferStream(input);
-    var reader = fbs.reader();
+    const reader = fbs.reader();
 
     var loader = Loader(.{ .dry_run = true }).init(allocator);
     try loader.loadFromStream(reader);
