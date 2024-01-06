@@ -16,8 +16,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     _ = b.addModule("dotenv", .{
-        .source_file = .{ .path = "src/lib.zig" },
-        .dependencies = &.{},
+        .root_source_file = .{ .path = "src/lib.zig" },
     });
 
     const lib = b.addStaticLibrary(.{
