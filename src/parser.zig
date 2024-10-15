@@ -272,7 +272,7 @@ fn substitute_variables(
     name: []const u8,
     output: anytype,
 ) !void {
-    if (std.os.getenv(name)) |value| {
+    if (std.posix.getenv(name)) |value| {
         _ = try output.write(value);
     } else {
         const value = ctx.get(name) orelse "";
