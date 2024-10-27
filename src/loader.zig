@@ -263,7 +263,7 @@ test "test load" {
     try testing.expectEqualStrings(loader.envs().get("KEY8").?.?, "whitespace before =");
     try testing.expectEqualStrings(loader.envs().get("KEY9").?.?, "whitespace after =");
 
-    const r = std.os.getenv("KEY0");
+    const r = std.posix.getenv("KEY0");
     try testing.expectEqualStrings(r.?, "0");
 }
 
@@ -297,7 +297,7 @@ test "test not override" {
     defer loader.deinit();
     try loader.loadFromStream(reader);
 
-    const r = std.os.getenv("HOME");
+    const r = std.posix.getenv("HOME");
     try testing.expect(!std.mem.eql(u8, r.?, "/home/nayuta"));
 }
 
@@ -314,7 +314,7 @@ test "test override" {
     defer loader.deinit();
     try loader.loadFromStream(reader);
 
-    const r = std.os.getenv("HOME");
+    const r = std.posix.getenv("HOME");
     try testing.expect(std.mem.eql(u8, r.?, "/home/nayuta"));
 }
 

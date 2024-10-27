@@ -6,14 +6,14 @@ pub fn main() !void {
 
     std.debug.print(
         "Before => HOME={s}\n",
-        .{std.os.getenv("HOME") orelse ""},
+        .{std.posix.getenv("HOME") orelse ""},
     );
 
     var envs = try dotenv.getDataFrom(allocator, "./.env3");
 
     std.debug.print(
         "After  => HOME={s}\n",
-        .{std.os.getenv("HOME") orelse ""},
+        .{std.posix.getenv("HOME") orelse ""},
     );
 
     std.debug.print("Process envs have not been modified!\n\n", .{});

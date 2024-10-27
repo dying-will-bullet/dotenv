@@ -8,6 +8,6 @@ pub fn main() !void {
 
     std.debug.print(
         "VAR3=\"{s}\"\n",
-        .{std.os.getenv("VAR3") orelse ""},
+        .{std.posix.getenv("VAR3") orelse ""},
     );
 }
