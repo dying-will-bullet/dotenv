@@ -14,6 +14,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
       - run: zig version
       - run: zig env
       - name: Build
@@ -23,9 +25,9 @@ jobs:
       - name: Install kcov
         run: sudo apt-get install -y kcov
       - name: Generate coverage
-        run: kcov $PWD/kcov-out ./zig-cache/o/*/test
+        run: kcov $PWD/kcov-out ./.zig-cache/o/*/test
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           directory: ./kcov-out/test
