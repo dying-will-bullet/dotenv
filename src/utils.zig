@@ -62,6 +62,7 @@ pub const FileFinder = struct {
             } else {
                 // Not Found, try the parent dir
                 if (std.fs.path.dirname(dirname)) |parent| {
+                    allocator.free(path); // situation not captured by errdefer
                     return Self.recursiveFind(allocator, parent, filename);
                 } else {
                     return std.fs.File.OpenError.FileNotFound;
