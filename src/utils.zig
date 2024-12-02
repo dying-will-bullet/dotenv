@@ -53,11 +53,11 @@ pub const FileFinder = struct {
     /// Find a file and automatically look in the parent directory if it is not found.
     fn recursiveFind(allocator: std.mem.Allocator, dirname: []const u8, filename: []const u8) ![]const u8 {
         const path = try std.fs.path.join(allocator, &.{ dirname, filename });
-        errdefer allocator.free(path);
 
         const f = std.fs.openFileAbsolute(path, .{}) catch |e| {
             // Find the file, but could not open it.
             if (e != std.fs.File.OpenError.FileNotFound) {
+                allocator.free(path);
                 return e;
             } else {
                 // Not Found, try the parent dir
@@ -65,6 +65,7 @@ pub const FileFinder = struct {
                     allocator.free(path); // situation not captured by errdefer
                     return Self.recursiveFind(allocator, parent, filename);
                 } else {
+                    allocator.free(path);
                     return std.fs.File.OpenError.FileNotFound;
                 }
             }
@@ -78,8 +79,10 @@ pub const FileFinder = struct {
         }
 
         if (std.fs.path.dirname(dirname)) |parent| {
+            allocator.free(path);
             return Self.recursiveFind(allocator, parent, filename);
         } else {
+            allocator.free(path);
             return std.fs.File.OpenError.FileNotFound;
         }
     }
