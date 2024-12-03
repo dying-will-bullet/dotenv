@@ -95,53 +95,6 @@ ME="/koyori"
 HOME="${HO}${ME}"  # equal to HOME=/home/koyori
 ```
 
-## Installation
-
-Add `dotenv` as dependency in `build.zig.zon`:
-
-```
-.{
-    .name = "my-project",
-    .version = "0.1.0",
-    .dependencies = .{
-       .dotenv = .{
-           .url = "https://github.com/dying-will-bullet/dotenv/archive/refs/tags/v0.1.1.tar.gz",
-           .hash = "1220f0f6736020856641d3644ef44f95ce21f3923d5dae7f9ac8658187574d36bcb8"
-       },
-    },
-    .paths = .{""}
-}
-```
-
-Add `dotenv` as a module in `build.zig`:
-
-```diff
-diff --git a/build.zig b/build.zig
-index 957f625..66dd12a 100644
---- a/build.zig
-+++ b/build.zig
-@@ -15,6 +15,9 @@ pub fn build(b: *std.Build) void {
-     // set a preferred release mode, allowing the user to decide how to optimize.
-     const optimize = b.standardOptimizeOption(.{});
-
-+    const opts = .{ .target = target, .optimize = optimize };
-+    const dotenv_module = b.dependency("dotenv", opts).module("dotenv");
-+
-     const exe = b.addExecutable(.{
-         .name = "tmp",
-         // In this case the main source file is merely a path, however, in more
-@@ -23,6 +26,8 @@ pub fn build(b: *std.Build) void {
-         .target = target,
-         .optimize = optimize,
-     });
-+    exe.addModule("dotenv", dotenv_module);
-+    // If you want to modify environment variables.
-+    exe.linkSystemLibrary("c");
-
-     // This declares intent for the executable to be installed into the
-     // standard location when the user invokes the "install" step (the default
-```
-
 ## LICENSE
 
-MIT License Copyright (c) 2023, Hanaasagi
+MIT License Copyright (c) 2023-2024, Hanaasagi
