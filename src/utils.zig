@@ -5,13 +5,13 @@ const testing = std.testing;
 pub extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
 
 // https://github.com/ziglang/zig/wiki/Zig-Newcomer-Programming-FAQs#converting-from-t-to-0t
-pub fn toCString(str: []const u8) ![std.fs.MAX_PATH_BYTES - 1:0]u8 {
+pub fn toCString(str: []const u8) ![std.fs.max_path_bytes - 1:0]u8 {
     if (std.debug.runtime_safety) {
         std.debug.assert(std.mem.indexOfScalar(u8, str, 0) == null);
     }
-    var path_with_null: [std.fs.MAX_PATH_BYTES - 1:0]u8 = undefined;
+    var path_with_null: [std.fs.max_path_bytes - 1:0]u8 = undefined;
 
-    if (str.len >= std.fs.MAX_PATH_BYTES) {
+    if (str.len >= std.fs.max_path_bytes) {
         return error.NameTooLong;
     }
     @memcpy(path_with_null[0..str.len], str);
@@ -43,7 +43,7 @@ pub const FileFinder = struct {
     /// The return value should be freed by caller.
     pub fn find(self: Self, allocator: std.mem.Allocator) ![]const u8 {
         // TODO: allocator?
-        var buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+        var buf: [std.fs.max_path_bytes]u8 = undefined;
         const cwd = try std.process.getCwd(&buf);
 
         const path = try Self.recursiveFind(allocator, cwd, self.filename);
