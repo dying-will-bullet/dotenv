@@ -10,7 +10,9 @@ on:
 jobs:
   test:
     name: Tests on Linux
-    runs-on: ubuntu-latest
+    # kcov is removed
+    # runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
       - uses: goto-bus-stop/setup-zig@v2
