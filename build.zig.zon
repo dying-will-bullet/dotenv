@@ -1,5 +1,6 @@
 .{
-    .name = "dotenv",
+    .name = .dotenv,
+    .fingerprint = 0xd19ca053c01f438a,
     .version = "0.2.1",
     .dependencies = .{},
     .paths = .{
