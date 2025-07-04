@@ -10,7 +10,7 @@ Storing configuration in the environment separate from code is based on The
 
 This library is a Zig language port of [nodejs dotenv](https://github.com/motdotla/dotenv).
 
-Test with Zig 0.13.0
+Test with Zig 0.14.0
 
 ## Quick Start
 

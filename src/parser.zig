@@ -315,7 +315,7 @@ test "test parse" {
     var parser = LineParser.init(allocator);
     defer parser.deinit();
 
-    var it = std.mem.split(u8, input, "\n");
+    var it = std.mem.splitScalar(u8, input, '\n');
     var i: usize = 0;
     while (it.next()) |line| {
         var buf = std.ArrayList(u8).init(allocator);
