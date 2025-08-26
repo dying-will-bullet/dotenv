@@ -73,8 +73,7 @@ pub const FileFinder = struct {
         defer f.close();
 
         // Check the path is a file.
-        const metadata = try f.metadata();
-        if (metadata.kind() == .file) {
+        if ((try f.stat()).kind == .file) {
             return path;
         }
 

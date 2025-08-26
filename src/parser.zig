@@ -116,15 +116,15 @@ pub const LineParser = struct {
         var escaped = false;
         var expecting_end = false;
 
-        var output_buf = std.ArrayList(u8).init(self.allocator);
-        defer output_buf.deinit();
-        var output = output_buf.writer();
+        var output_buf: std.ArrayList(u8) = .empty;
+        defer output_buf.deinit(self.allocator);
+        var output = output_buf.writer(self.allocator);
 
         var substitution_mode = SubstitutionMode.none;
 
-        var name_buf = std.ArrayList(u8).init(self.allocator);
-        defer name_buf.deinit();
-        var substitution_name = name_buf.writer();
+        var name_buf: std.ArrayList(u8) = .empty;
+        defer name_buf.deinit(self.allocator);
+        var substitution_name = name_buf.writer(self.allocator);
 
         for (0.., self.line) |i, c| {
             _ = i;
@@ -219,7 +219,7 @@ pub const LineParser = struct {
         } else {
             try substitute_variables(&self.ctx, name_buf.items, output);
             name_buf.clearRetainingCapacity();
-            return output_buf.toOwnedSlice();
+            return output_buf.toOwnedSlice(self.allocator);
         }
     }
 
@@ -318,10 +318,10 @@ test "test parse" {
     var it = std.mem.splitScalar(u8, input, '\n');
     var i: usize = 0;
     while (it.next()) |line| {
-        var buf = std.ArrayList(u8).init(allocator);
-        defer buf.deinit();
+        var buf: std.ArrayList(u8) = .empty;
+        defer buf.deinit(allocator);
 
-        try buf.writer().print("KEY{d}", .{i});
+        try buf.writer(allocator).print("KEY{d}", .{i});
         const key = buf.items;
 
         _ = try parser.parseLine(line);
