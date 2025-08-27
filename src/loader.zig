@@ -54,49 +54,46 @@ pub fn Loader(comptime options: Options) type {
             var f = try std.fs.cwd().openFile(path, .{});
             defer f.close();
 
-            var br = std.io.bufferedReader(f.reader());
-            const reader = br.reader();
-
-            return try self.loadFromStream(reader);
+            var buffer: [4096]u8 = undefined;
+            var reader = f.readerStreaming(&buffer);
+            return try self.loadFromStream(&reader.interface);
         }
 
-        pub fn loadFromStream(self: *Self, reader: anytype) !void {
+        pub fn loadFromStream(self: *Self, reader: *std.Io.Reader) !void {
             while (true) {
                 // read a logical line.
-                const line = try self.readLine(reader);
-                if (line == null) {
-                    return;
-                }
+                if (try self.readLine(reader)) |line| {
+                    defer self.allocator.free(line);
 
-                const result = try self.parser.parseLine(line.?);
-                if (result == null) {
-                    continue;
-                }
-
-                if (options.dry_run) {
-                    self.allocator.free(line.?);
-                    continue;
-                }
-
-                const key = try toCString(result.?.key);
-                const value = try toCString(result.?.value);
-
-                // https://man7.org/linux/man-pages/man3/setenv.3.html
-                var err_code: c_int = undefined;
-                if (options.override) {
-                    err_code = setenv(&key, &value, 1);
-                } else {
-                    err_code = setenv(&key, &value, 0);
-                }
-
-                self.allocator.free(line.?);
-
-                if (err_code != 0) {
-                    switch (err_code) {
-                        22 => return Error.InvalidValue,
-                        12 => return error.OutOfMemory,
-                        else => unreachable,
+                    const result = try self.parser.parseLine(line);
+                    if (result == null) {
+                        continue;
                     }
+
+                    if (options.dry_run) {
+                        continue;
+                    }
+
+                    const key = try toCString(result.?.key);
+                    const value = try toCString(result.?.value);
+
+                    // https://man7.org/linux/man-pages/man3/setenv.3.html
+                    var err_code: c_int = undefined;
+                    if (options.override) {
+                        err_code = setenv(&key, &value, 1);
+                    } else {
+                        err_code = setenv(&key, &value, 0);
+                    }
+
+                    if (err_code != 0) {
+                        switch (err_code) {
+                            22 => return Error.InvalidValue,
+                            12 => return error.OutOfMemory,
+                            else => unreachable,
+                        }
+                    }
+                } else {
+                    return;
                 }
             }
         }
@@ -113,69 +110,63 @@ pub fn Loader(comptime options: Options) type {
         /// Line2"
         /// ```
         /// It will be returned as a single line.
-        fn readLine(self: Self, reader: anytype) !?[]const u8 {
+        fn readLine(self: Self, reader: *std.Io.Reader) !?[]const u8 {
             var cur_state: ParseState = ParseState.complete;
             var buf_pos: usize = undefined;
             var cur_pos: usize = undefined;
 
-            var buf = std.ArrayList(u8).init(self.allocator);
-            defer buf.deinit();
+            var buf: std.ArrayList(u8) = .empty;
+            defer buf.deinit(self.allocator);
 
             // TODO: line size
             // someone may use JSON text as the value for the env var.
-            var line_buf: [1024]u8 = undefined;
-            while (reader.readUntilDelimiterOrEof(&line_buf, '\n')) |data| {
+            while (reader.takeDelimiterExclusive('\n')) |data| {
                 buf_pos = buf.items.len;
-                if (data == null) {
-                    if (cur_state == .complete) {
-                        return null;
-                    } else {
-                        return Error.ParseError;
-                    }
-                } else {
-                    if (data.?.len == 0) {
-                        continue;
-                    }
-
-                    try buf.appendSlice(data.?);
-                    // resotre newline
-                    try buf.append('\n');
-
-                    if (std.mem.startsWith(u8, std.mem.trimLeft(
-                        u8,
-                        buf.items,
-                        // ASCII Whitespace
-                        &[_]u8{ ' ', '\x09', '\x0a', '\x0b', '\x0c', '\x0d' },
-                    ), "#")) {
-                        return "";
-                    }
-
-                    const result = nextState(cur_state, buf.items[buf_pos..]);
-                    cur_pos = result.new_pos;
-                    cur_state = result.new_state;
-
-                    switch (cur_state) {
-                        .complete => {
-                            if (std.mem.endsWith(u8, buf.items, "\n")) {
-                                _ = buf.pop();
-                                if (std.mem.endsWith(u8, buf.items, "\r")) {
-                                    _ = buf.pop();
-                                }
-                            }
-                            return try buf.toOwnedSlice();
-                        },
-                        .comment => {
-                            // truncate
-                            try buf.resize(buf_pos + cur_pos);
-                            return try buf.toOwnedSlice();
-                        },
-                        else => {
-                            //  do nothing
-                        },
-                    }
+                if (data.len == 0) {
+                    continue;
                 }
-            } else |err| {
-                return err;
+
+                try buf.appendSlice(self.allocator, data);
+                // resotre newline
+                try buf.append(self.allocator, '\n');
+
+                if (std.mem.startsWith(u8, std.mem.trimLeft(
+                    u8,
+                    buf.items,
+                    // ASCII Whitespace
+                    &[_]u8{ ' ', '\x09', '\x0a', '\x0b', '\x0c', '\x0d' },
+                ), "#")) {
+                    return "";
+                }
+
+                const result = nextState(cur_state, buf.items[buf_pos..]);
+                cur_pos = result.new_pos;
+                cur_state = result.new_state;
+
+                switch (cur_state) {
+                    .complete => {
+                        if (std.mem.endsWith(u8, buf.items, "\n")) {
+                            _ = buf.pop();
+                            if (std.mem.endsWith(u8, buf.items, "\r")) {
+                                _ = buf.pop();
+                            }
+                        }
+                        return try buf.toOwnedSlice(
+                            self.allocator,
+                        );
+                    },
+                    .comment => {
+                        // truncate
+                        try buf.resize(self.allocator, buf_pos + cur_pos);
+                        return try buf.toOwnedSlice(self.allocator);
+                    },
+                    else => {
+                        //  do nothing
+                    },
+                }
+            } else |err| switch (err) {
+                std.Io.Reader.DelimiterError.EndOfStream => return null,
+                else => return err,
             }
         }
     };
@@ -245,12 +236,11 @@ test "test load" {
         \\KEY9=    "whitespace after ="
     ;
 
-    var fbs = std.io.fixedBufferStream(input);
-    const reader = fbs.reader();
+    var reader = std.Io.Reader.fixed(input);
 
     var loader = Loader(.{}).init(allocator);
     defer loader.deinit();
-    try loader.loadFromStream(reader);
+    try loader.loadFromStream(&reader);
 
     try testing.expectEqualStrings(loader.envs().get("KEY0").?.?, "0");
     try testing.expectEqualStrings(loader.envs().get("KEY1").?.?, "1");
@@ -274,28 +264,24 @@ test "test multiline" {
         \\S"
     ;
 
-    var fbs = std.io.fixedBufferStream(input);
-    const reader = fbs.reader();
-
     var loader = Loader(.{}).init(allocator);
     defer loader.deinit();
-    try loader.loadFromStream(reader);
+
+    var reader = std.Io.Reader.fixed(input);
+    try loader.loadFromStream(&reader);
 
     try testing.expectEqualStrings(loader.envs().get("C").?.?, "F\nS");
 }
 
 test "test not override" {
     const allocator = testing.allocator;
-    const input =
-        \\HOME=/home/nayuta
-    ;
-
-    var fbs = std.io.fixedBufferStream(input);
-    const reader = fbs.reader();
+    const input = "HOME=/home/nayuta\n";
 
     var loader = Loader(.{ .override = false }).init(allocator);
     defer loader.deinit();
-    try loader.loadFromStream(reader);
+
+    var reader = std.Io.Reader.fixed(input);
+    try loader.loadFromStream(&reader);
 
     const r = std.posix.getenv("HOME");
     try testing.expect(!std.mem.eql(u8, r.?, "/home/nayuta"));
@@ -303,16 +289,13 @@ test "test not override" {
 
 test "test override" {
     const allocator = testing.allocator;
-    const input =
-        \\HOME=/home/nayuta
-    ;
-
-    var fbs = std.io.fixedBufferStream(input);
-    const reader = fbs.reader();
+    const input = "HOME=/home/nayuta\n";
 
     var loader = Loader(.{ .override = true }).init(allocator);
     defer loader.deinit();
-    try loader.loadFromStream(reader);
+
+    var reader = std.Io.Reader.fixed(input);
+    try loader.loadFromStream(&reader);
 
     const r = std.posix.getenv("HOME");
     try testing.expect(std.mem.eql(u8, r.?, "/home/nayuta"));
@@ -320,15 +303,12 @@ test "test override" {
 
 test "test ownership" {
     const allocator = testing.allocator;
-    const input =
-        \\HOME=/home/korone
-    ;
-
-    var fbs = std.io.fixedBufferStream(input);
-    const reader = fbs.reader();
+    const input = "HOME=/home/korone\n";
 
     var loader = Loader(.{ .dry_run = true }).init(allocator);
-    try loader.loadFromStream(reader);
+
+    var reader = std.Io.Reader.fixed(input);
+    try loader.loadFromStream(&reader);
 
     var envs = loader.envs().move();
     loader.deinit();
