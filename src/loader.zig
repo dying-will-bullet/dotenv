@@ -121,13 +121,15 @@ pub fn Loader(comptime options: Options) type {
             // TODO: line size
             // someone may use JSON text as the value for the env var.
             while (reader.takeDelimiterExclusive('\n')) |data| {
+                if (reader.peek(1)) |_| reader.toss(1) else |_| {}
+
                 buf_pos = buf.items.len;
                 if (data.len == 0) {
                     continue;
                 }
 
                 try buf.appendSlice(self.allocator, data);
-                // resotre newline
+                // restore newline
                 try buf.append(self.allocator, '\n');
 
                 if (std.mem.startsWith(u8, std.mem.trimLeft(
@@ -242,19 +244,19 @@ test "test load" {
     defer loader.deinit();
     try loader.loadFromStream(&reader);
 
-    try testing.expectEqualStrings(loader.envs().get("KEY0").?.?, "0");
-    try testing.expectEqualStrings(loader.envs().get("KEY1").?.?, "1");
-    try testing.expectEqualStrings(loader.envs().get("KEY2").?.?, "2");
-    try testing.expectEqualStrings(loader.envs().get("KEY3").?.?, "th ree");
-    try testing.expectEqualStrings(loader.envs().get("KEY4").?.?, "fo ur");
-    try testing.expectEqualStrings(loader.envs().get("KEY5").?.?, "f ive");
+    try testing.expectEqualStrings("0", loader.envs().get("KEY0").?.?);
+    try testing.expectEqualStrings("1", loader.envs().get("KEY1").?.?);
+    try testing.expectEqualStrings("2", loader.envs().get("KEY2").?.?);
+    try testing.expectEqualStrings("th ree", loader.envs().get("KEY3").?.?);
+    try testing.expectEqualStrings("fo ur", loader.envs().get("KEY4").?.?);
+    try testing.expectEqualStrings("f ive", loader.envs().get("KEY5").?.?);
     try testing.expect(loader.envs().get("KEY6").? == null);
     try testing.expect(loader.envs().get("KEY7").? == null);
-    try testing.expectEqualStrings(loader.envs().get("KEY8").?.?, "whitespace before =");
-    try testing.expectEqualStrings(loader.envs().get("KEY9").?.?, "whitespace after =");
+    try testing.expectEqualStrings("whitespace before =", loader.envs().get("KEY8").?.?);
+    try testing.expectEqualStrings("whitespace after =", loader.envs().get("KEY9").?.?);
 
     const r = std.posix.getenv("KEY0");
-    try testing.expectEqualStrings(r.?, "0");
+    try testing.expectEqualStrings("0", r.?);
 }
 
 test "test multiline" {
