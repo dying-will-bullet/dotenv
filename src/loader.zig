@@ -5,12 +5,11 @@ const toCString = @import("./utils.zig").toCString;
 const Error = @import("./error.zig").Error;
 
 const testing = std.testing;
+const EnvMap = std.process.Environ.Map;
 
 pub const Options = struct {
     /// override existed env value, default `false`
     override: bool = false,
-    /// read and collect environment variables, but do not write them to the environment.
-    dry_run: bool = false,
 };
 
 const ParseState = enum {
@@ -50,16 +49,19 @@ pub fn Loader(comptime options: Options) type {
             return &self.parser.ctx;
         }
 
-        pub fn loadFromFile(self: *Self, path: []const u8) !void {
-            var f = try std.fs.cwd().openFile(path, .{});
-            defer f.close();
+        /// Loads variables from `path` into `env_map`.
+        pub fn loadFromFile(self: *Self, io: std.Io, env_map: *EnvMap, path: []const u8) !void {
+            var f = try std.Io.Dir.cwd().openFile(io, path, .{});
+            defer f.close(io);
 
             var buffer: [4096]u8 = undefined;
-            var reader = f.readerStreaming(&buffer);
-            return try self.loadFromStream(&reader.interface);
+            var reader = f.readerStreaming(io, &buffer);
+            return try self.loadIntoMap(env_map, &reader.interface);
         }
 
-        pub fn loadFromStream(self: *Self, reader: *std.Io.Reader) !void {
+        /// Loads variables from `reader` into `env_map`.
+        pub fn loadIntoMap(self: *Self, env_map: *EnvMap, reader: *std.Io.Reader) !void {
+            self.parser.base_env = env_map;
             while (true) {
                 // read a logical line.
                 if (try self.readLine(reader)) |line| {
@@ -70,7 +72,26 @@ pub fn Loader(comptime options: Options) type {
                         continue;
                     }
 
-                    if (options.dry_run) {
+                    if (!options.override and env_map.contains(result.?.key)) {
+                        continue;
+                    }
+
+                    try env_map.put(result.?.key, result.?.value);
+                } else {
+                    return;
+                }
+            }
+        }
+
+        /// Loads variables from `reader` into the C process environment via `setenv`.
+        pub fn loadIntoCEnv(self: *Self, reader: *std.Io.Reader) !void {
+            while (true) {
+                // read a logical line.
+                if (try self.readLine(reader)) |line| {
+                    defer self.allocator.free(line);
+
+                    const result = try self.parser.parseLine(line);
+                    if (result == null) {
                         continue;
                     }
 
@@ -132,7 +153,7 @@ pub fn Loader(comptime options: Options) type {
                 // restore newline
                 try buf.append(self.allocator, '\n');
 
-                if (std.mem.startsWith(u8, std.mem.trimLeft(
+                if (std.mem.startsWith(u8, std.mem.trimStart(
                     u8,
                     buf.items,
                     // ASCII Whitespace
@@ -153,9 +174,7 @@ pub fn Loader(comptime options: Options) type {
                                 _ = buf.pop();
                             }
                         }
-                        return try buf.toOwnedSlice(
-                            self.allocator,
-                        );
+                        return try buf.toOwnedSlice(self.allocator);
                     },
                     .comment => {
                         // truncate
@@ -242,21 +261,20 @@ test "test load" {
 
     var loader = Loader(.{}).init(allocator);
     defer loader.deinit();
-    try loader.loadFromStream(&reader);
+    var env_map = EnvMap.init(allocator);
+    defer env_map.deinit();
+    try loader.loadIntoMap(&env_map, &reader);
 
-    try testing.expectEqualStrings("0", loader.envs().get("KEY0").?.?);
-    try testing.expectEqualStrings("1", loader.envs().get("KEY1").?.?);
-    try testing.expectEqualStrings("2", loader.envs().get("KEY2").?.?);
-    try testing.expectEqualStrings("th ree", loader.envs().get("KEY3").?.?);
-    try testing.expectEqualStrings("fo ur", loader.envs().get("KEY4").?.?);
-    try testing.expectEqualStrings("f ive", loader.envs().get("KEY5").?.?);
-    try testing.expect(loader.envs().get("KEY6").? == null);
-    try testing.expect(loader.envs().get("KEY7").? == null);
-    try testing.expectEqualStrings("whitespace before =", loader.envs().get("KEY8").?.?);
-    try testing.expectEqualStrings("whitespace after =", loader.envs().get("KEY9").?.?);
-
-    const r = std.posix.getenv("KEY0");
-    try testing.expectEqualStrings("0", r.?);
+    try testing.expectEqualStrings("0", env_map.get("KEY0").?);
+    try testing.expectEqualStrings("1", env_map.get("KEY1").?);
+    try testing.expectEqualStrings("2", env_map.get("KEY2").?);
+    try testing.expectEqualStrings("th ree", env_map.get("KEY3").?);
+    try testing.expectEqualStrings("fo ur", env_map.get("KEY4").?);
+    try testing.expectEqualStrings("f ive", env_map.get("KEY5").?);
+    try testing.expect(env_map.get("KEY6").?.len == 0);
+    try testing.expect(env_map.get("KEY7").?.len == 0);
+    try testing.expectEqualStrings("whitespace before =", env_map.get("KEY8").?);
+    try testing.expectEqualStrings("whitespace after =", env_map.get("KEY9").?);
 }
 
 test "test multiline" {
@@ -270,9 +288,11 @@ test "test multiline" {
     defer loader.deinit();
 
     var reader = std.Io.Reader.fixed(input);
-    try loader.loadFromStream(&reader);
+    var env_map = EnvMap.init(allocator);
+    defer env_map.deinit();
+    try loader.loadIntoMap(&env_map, &reader);
 
-    try testing.expectEqualStrings(loader.envs().get("C").?.?, "F\nS");
+    try testing.expectEqualStrings(env_map.get("C").?, "F\nS");
 }
 
 test "test not override" {
@@ -281,12 +301,14 @@ test "test not override" {
 
     var loader = Loader(.{ .override = false }).init(allocator);
     defer loader.deinit();
+    var env_map = EnvMap.init(allocator);
+    defer env_map.deinit();
+    try env_map.put("HOME", "/home/existing");
 
     var reader = std.Io.Reader.fixed(input);
-    try loader.loadFromStream(&reader);
+    try loader.loadIntoMap(&env_map, &reader);
 
-    const r = std.posix.getenv("HOME");
-    try testing.expect(!std.mem.eql(u8, r.?, "/home/nayuta"));
+    try testing.expectEqualStrings("/home/existing", env_map.get("HOME").?);
 }
 
 test "test override" {
@@ -295,34 +317,27 @@ test "test override" {
 
     var loader = Loader(.{ .override = true }).init(allocator);
     defer loader.deinit();
+    var env_map = EnvMap.init(allocator);
+    defer env_map.deinit();
+    try env_map.put("HOME", "/home/existing");
 
     var reader = std.Io.Reader.fixed(input);
-    try loader.loadFromStream(&reader);
+    try loader.loadIntoMap(&env_map, &reader);
 
-    const r = std.posix.getenv("HOME");
-    try testing.expect(std.mem.eql(u8, r.?, "/home/nayuta"));
+    try testing.expectEqualStrings("/home/nayuta", env_map.get("HOME").?);
 }
 
 test "test ownership" {
     const allocator = testing.allocator;
     const input = "HOME=/home/korone\n";
 
-    var loader = Loader(.{ .dry_run = true }).init(allocator);
+    var loader = Loader(.{}).init(allocator);
+    defer loader.deinit();
 
     var reader = std.Io.Reader.fixed(input);
-    try loader.loadFromStream(&reader);
+    var env_map = EnvMap.init(allocator);
+    defer env_map.deinit();
+    try loader.loadIntoMap(&env_map, &reader);
 
-    var envs = loader.envs().move();
-    loader.deinit();
-
-    try testing.expect(std.mem.eql(u8, envs.get("HOME").?.?, "/home/korone"));
-
-    var it = envs.iterator();
-    while (it.next()) |*entry| {
-        allocator.free(entry.key_ptr.*);
-        if (entry.value_ptr.* != null) {
-            allocator.free(entry.value_ptr.*.?);
-        }
-    }
-    envs.deinit();
+    try testing.expectEqualStrings("/home/korone", env_map.get("HOME").?);
 }

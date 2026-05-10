@@ -4,26 +4,41 @@
 [![codecov](https://codecov.io/gh/dying-will-bullet/dotenv/branch/master/graph/badge.svg?token=D8DHON0VE5)](https://codecov.io/gh/dying-will-bullet/dotenv)
 ![](https://img.shields.io/badge/language-zig-%23ec915c)
 
-dotenv is a library that loads environment variables from a `.env` file into `std.os.environ`.
+dotenv is a library that parses variables from a `.env` file.
 Storing configuration in the environment separate from code is based on The
 [Twelve-Factor](http://12factor.net/config) App methodology.
 
 This library is a Zig language port of [nodejs dotenv](https://github.com/motdotla/dotenv).
 
-Test with Zig 0.15.2
+Target Zig version: 0.16.0
+
+## Zig 0.16 API
+
+Zig 0.16 no longer exposes process environment variables as mutable global state through the standard library.
+The recommended model is for the application to receive `std.process.Init` in `main`, then pass `init.io` and `init.environ_map` to dotenv.
+
+```zig
+pub fn main(init: std.process.Init) !void {
+    try dotenv.load(init.gpa, init.io, init.environ_map, .{});
+
+    if (init.environ_map.get("DATABASE_URL")) |database_url| {
+        std.debug.print("DATABASE_URL={s}\n", .{database_url});
+    }
+}
+```
+
+For compatibility with C libraries, dotenv also provides `loadC` and `loadFromC`, which call libc `setenv` and require linking libc.
 
 ## Quick Start
 
-Automatically find the `.env` file and load the variables into the process environment with just one line.
+Automatically find the `.env` file and load the variables into the application environment map.
 
 ```zig
 const std = @import("std");
 const dotenv = @import("dotenv");
 
-pub fn main() !void {
-    const allocator = std.heap.page_allocator;
-
-    try dotenv.load(allocator, .{});
+pub fn main(init: std.process.Init) !void {
+    try dotenv.load(init.gpa, init.io, init.environ_map, .{});
 }
 ```
 
@@ -31,31 +46,42 @@ By default, it will search for a file named `.env` in the working directory and 
 Of course, you can specify a path if desired.
 
 ```zig
-pub fn main() !void {
-    try dotenv.loadFrom(allocator, "/app/.env", .{});
+pub fn main(init: std.process.Init) !void {
+    try dotenv.loadFrom(init.gpa, init.io, init.environ_map, "/app/.env", .{});
 }
 ```
 
-**Since writing to `std.os.environ` requires a C `setenv` call, linking with C is necessary.**
+The Zig-native APIs do not require libc. Only the optional `loadC` / `loadFromC` compatibility path needs libc.
 
 If you only want to read and parse the contents of the `.env` file, you can try the following.
 
 ```zig
-pub fn main() !void {
-    var envs = try dotenv.getDataFrom(allocator, ".env");
+pub fn main(init: std.process.Init) !void {
+    var envs = try dotenv.loadFromAlloc(init.gpa, init.io, ".env", .{});
+    defer envs.deinit();
 
-    var it = envs.iterator();
-    while (it.next()) |*entry| {
+    for (envs.keys(), envs.values()) |key, value| {
         std.debug.print(
             "{s}={s}\n",
-            .{ entry.key_ptr.*, entry.value_ptr.*.? },
+            .{ key, value },
         );
     }
 }
 ```
 
 This does not require linking with a C library.
-The caller owns the memory, so you need to free both the key and value in the hashmap.
+The caller owns the returned `std.process.Environ.Map` and must call `deinit`.
+
+## API
+
+- `load(allocator, io, env_map, options)`: find `.env` from the current directory or parents and load it into `env_map`.
+- `loadFrom(allocator, io, env_map, path, options)`: load variables from `path` into `env_map`.
+- `loadAlloc(allocator, io, options)`: find `.env` and return a newly allocated `std.process.Environ.Map`.
+- `loadFromAlloc(allocator, io, path, options)`: load `path` and return a newly allocated `std.process.Environ.Map`.
+- `loadC(allocator, io, options)`: find `.env` and write variables to the C process environment with `setenv`.
+- `loadFromC(allocator, io, path, options)`: load `path` and write variables to the C process environment with `setenv`.
+
+`options.override` defaults to `false`, so existing keys in the target map or C environment are preserved unless you pass `.{ .override = true }`.
 
 ## `.env` Syntax
 

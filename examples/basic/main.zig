@@ -1,18 +1,12 @@
 const std = @import("std");
 const dotenv = @import("dotenv");
 
-pub fn main() !void {
-    const allocator = std.heap.page_allocator;
+pub fn main(init: std.process.Init) !void {
+    const before = init.environ_map.get("GITHUB_REPOSITORY") orelse "";
+    std.debug.print("Before => GITHUB_REPOSITORY={s}\n", .{before});
 
-    std.debug.print(
-        "Before => GITHUB_REPOSITORY={s}\n",
-        .{std.posix.getenv("GITHUB_REPOSITORY") orelse ""},
-    );
+    try dotenv.load(init.gpa, init.io, init.environ_map, .{});
 
-    try dotenv.load(allocator, .{});
-
-    std.debug.print(
-        "After  => GITHUB_REPOSITORY={s}\n",
-        .{std.posix.getenv("GITHUB_REPOSITORY") orelse ""},
-    );
+    const after = init.environ_map.get("GITHUB_REPOSITORY") orelse "";
+    std.debug.print("After  => GITHUB_REPOSITORY={s}\n", .{after});
 }

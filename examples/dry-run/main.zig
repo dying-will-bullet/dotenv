@@ -1,29 +1,23 @@
 const std = @import("std");
 const dotenv = @import("dotenv");
 
-pub fn main() !void {
-    const allocator = std.heap.page_allocator;
+pub fn main(init: std.process.Init) !void {
+    const before = init.environ_map.get("HOME") orelse "";
+    std.debug.print("Before => HOME={s}\n", .{before});
 
-    std.debug.print(
-        "Before => HOME={s}\n",
-        .{std.posix.getenv("HOME") orelse ""},
-    );
+    var envs = try dotenv.loadFromAlloc(init.gpa, init.io, "./.env3", .{});
+    defer envs.deinit();
 
-    var envs = try dotenv.getDataFrom(allocator, "./.env3");
+    const after = init.environ_map.get("HOME") orelse "";
+    std.debug.print("After  => HOME={s}\n", .{after});
 
-    std.debug.print(
-        "After  => HOME={s}\n",
-        .{std.posix.getenv("HOME") orelse ""},
-    );
-
-    std.debug.print("Process envs have not been modified!\n\n", .{});
+    std.debug.print("Application env map has not been modified!\n\n", .{});
     std.debug.print("Now list envs from the file:\n", .{});
 
-    var it = envs.iterator();
-    while (it.next()) |*entry| {
+    for (envs.keys(), envs.values()) |key, value| {
         std.debug.print(
             "{s}={s}\n",
-            .{ entry.key_ptr.*, entry.value_ptr.*.? },
+            .{ key, value },
         );
     }
 }
