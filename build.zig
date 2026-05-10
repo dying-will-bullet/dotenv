@@ -15,21 +15,17 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = b.addModule("dotenv", .{
+    const dotenv_module = b.addModule("dotenv", .{
         .root_source_file = b.path("src/lib.zig"),
+        .target = target,
+        .optimize = optimize,
     });
 
     const lib = b.addLibrary(.{
         .name = "dotenv",
         .linkage = .static,
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/lib.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
+        .root_module = dotenv_module,
     });
-
-    lib.linkSystemLibrary("c");
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
@@ -43,9 +39,9 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/lib.zig"),
             .target = target,
             .optimize = optimize,
+            .link_libc = true,
         }),
     });
-    main_tests.linkSystemLibrary("c");
 
     const run_main_tests = b.addRunArtifact(main_tests);
 

@@ -41,48 +41,49 @@ pub const FileFinder = struct {
 
     /// Find the file and return absolute path.
     /// The return value should be freed by caller.
-    pub fn find(self: Self, allocator: std.mem.Allocator) ![]const u8 {
+    pub fn find(self: Self, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
         // TODO: allocator?
         var buf: [std.fs.max_path_bytes]u8 = undefined;
-        const cwd = try std.process.getCwd(&buf);
+        const len = try std.process.currentPath(io, &buf);
+        const cwd = buf[0..len];
 
-        const path = try Self.recursiveFind(allocator, cwd, self.filename);
+        const path = try Self.recursiveFind(allocator, io, cwd, self.filename);
         return path;
     }
 
     /// Find a file and automatically look in the parent directory if it is not found.
-    fn recursiveFind(allocator: std.mem.Allocator, dirname: []const u8, filename: []const u8) ![]const u8 {
+    fn recursiveFind(allocator: std.mem.Allocator, io: std.Io, dirname: []const u8, filename: []const u8) ![]const u8 {
         const path = try std.fs.path.join(allocator, &.{ dirname, filename });
 
-        const f = std.fs.openFileAbsolute(path, .{}) catch |e| {
+        const f = std.Io.Dir.openFileAbsolute(io, path, .{}) catch |e| {
             // Find the file, but could not open it.
-            if (e != std.fs.File.OpenError.FileNotFound) {
+            if (e != std.Io.File.OpenError.FileNotFound) {
                 allocator.free(path);
                 return e;
             } else {
                 // Not Found, try the parent dir
                 if (std.fs.path.dirname(dirname)) |parent| {
                     allocator.free(path); // situation not captured by errdefer
-                    return Self.recursiveFind(allocator, parent, filename);
+                    return Self.recursiveFind(allocator, io, parent, filename);
                 } else {
                     allocator.free(path);
-                    return std.fs.File.OpenError.FileNotFound;
+                    return std.Io.File.OpenError.FileNotFound;
                 }
             }
         };
-        defer f.close();
+        defer f.close(io);
 
         // Check the path is a file.
-        if ((try f.stat()).kind == .file) {
+        if ((try f.stat(io)).kind == .file) {
             return path;
         }
 
         if (std.fs.path.dirname(dirname)) |parent| {
             allocator.free(path);
-            return Self.recursiveFind(allocator, parent, filename);
+            return Self.recursiveFind(allocator, io, parent, filename);
         } else {
             allocator.free(path);
-            return std.fs.File.OpenError.FileNotFound;
+            return std.Io.File.OpenError.FileNotFound;
         }
     }
 };
@@ -92,7 +93,8 @@ test "test found" {
 
     var finder = FileFinder.init("./testdata/.env");
 
-    const path = try finder.find(allocator);
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const path = try finder.find(allocator, io);
     allocator.free(path);
 }
 
@@ -101,6 +103,7 @@ test "test not found" {
 
     var finder = FileFinder.init("balabalabala");
 
-    const res = finder.find(allocator);
-    try testing.expect(res == std.fs.File.OpenError.FileNotFound);
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const res = finder.find(allocator, io);
+    try testing.expect(res == std.Io.File.OpenError.FileNotFound);
 }

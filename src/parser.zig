@@ -27,6 +27,8 @@ pub const ParsedResult = struct {
 pub const LineParser = struct {
     /// Context
     ctx: std.StringHashMap(?[]const u8),
+    /// Optional environment map used as fallback during variable substitution.
+    base_env: ?*const std.process.Environ.Map,
     /// Line data
     line: []const u8,
     /// position
@@ -39,6 +41,7 @@ pub const LineParser = struct {
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
             .ctx = std.StringHashMap(?[]const u8).init(allocator),
+            .base_env = null,
             .line = "",
             .pos = 0,
             .allocator = allocator,
@@ -116,15 +119,14 @@ pub const LineParser = struct {
         var escaped = false;
         var expecting_end = false;
 
-        var output_buf: std.ArrayList(u8) = .empty;
-        defer output_buf.deinit(self.allocator);
-        var output = output_buf.writer(self.allocator);
+        var output_buf: std.Io.Writer.Allocating = .init(self.allocator);
+        defer output_buf.deinit();
+        const output = &output_buf.writer;
 
         var substitution_mode = SubstitutionMode.none;
 
         var name_buf: std.ArrayList(u8) = .empty;
         defer name_buf.deinit(self.allocator);
-        var substitution_name = name_buf.writer(self.allocator);
 
         for (0.., self.line) |i, c| {
             _ = i;
@@ -154,7 +156,7 @@ pub const LineParser = struct {
                 }
             } else if (substitution_mode != .none) {
                 if (std.ascii.isAlphanumeric(c)) {
-                    try substitution_name.writeByte(c);
+                    try name_buf.append(self.allocator, c);
                 } else {
                     switch (substitution_mode) {
                         .none => unreachable,
@@ -162,7 +164,7 @@ pub const LineParser = struct {
                             if (c == '{' and name_buf.items.len == 0) {
                                 substitution_mode = .escaped_block;
                             } else {
-                                try substitute_variables(&self.ctx, name_buf.items, output);
+                                try substitute_variables(&self.ctx, self.base_env, name_buf.items, output);
                                 name_buf.clearRetainingCapacity();
                                 if (c == '$') {
                                     if (!strong_quote and !escaped) {
@@ -179,10 +181,10 @@ pub const LineParser = struct {
                         .escaped_block => {
                             if (c == '}') {
                                 substitution_mode = .none;
-                                try substitute_variables(&self.ctx, name_buf.items, output);
+                                try substitute_variables(&self.ctx, self.base_env, name_buf.items, output);
                                 name_buf.clearRetainingCapacity();
                             } else {
-                                try substitution_name.writeByte(c);
+                                try name_buf.append(self.allocator, c);
                             }
                         },
                     }
@@ -217,9 +219,9 @@ pub const LineParser = struct {
         if (substitution_mode == .escaped_block or strong_quote or weak_quote) {
             return Error.InvalidValue;
         } else {
-            try substitute_variables(&self.ctx, name_buf.items, output);
+            try substitute_variables(&self.ctx, self.base_env, name_buf.items, output);
             name_buf.clearRetainingCapacity();
-            return output_buf.toOwnedSlice(self.allocator);
+            return output_buf.toOwnedSlice();
         }
     }
 
@@ -269,14 +271,20 @@ pub const LineParser = struct {
 /// and then from the context.
 fn substitute_variables(
     ctx: *std.StringHashMap(?[]const u8),
+    base_env: ?*const std.process.Environ.Map,
     name: []const u8,
     output: anytype,
 ) !void {
-    if (std.posix.getenv(name)) |value| {
-        _ = try output.write(value);
+    if (ctx.get(name)) |value| {
+        if (value) |v| {
+            _ = try output.write(v);
+        }
+    } else if (base_env) |env| {
+        if (env.get(name)) |value| {
+            _ = try output.write(value);
+        }
     } else {
-        const value = ctx.get(name) orelse "";
-        _ = try output.write(value.?);
+        _ = try output.write("");
     }
 }
 
@@ -321,8 +329,8 @@ test "test parse" {
         var buf: std.ArrayList(u8) = .empty;
         defer buf.deinit(allocator);
 
-        try buf.writer(allocator).print("KEY{d}", .{i});
-        const key = buf.items;
+        const key = try std.fmt.allocPrint(allocator, "KEY{d}", .{i});
+        defer allocator.free(key);
 
         _ = try parser.parseLine(line);
 

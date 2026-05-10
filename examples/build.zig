@@ -21,15 +21,18 @@ pub fn build(b: *std.Build) void {
 
         const exe = b.addExecutable(.{
             .name = exe_name,
-            .root_source_file = b.path(example_path),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(example_path),
+                .target = target,
+                .optimize = optimize,
+            }),
         });
         const mod = b.addModule("dotenv", .{
             .root_source_file = b.path("../src/lib.zig"),
+            .target = target,
+            .optimize = optimize,
         });
         exe.root_module.addImport("dotenv", mod);
-        exe.linkSystemLibrary("c");
 
         b.installArtifact(exe);
 
