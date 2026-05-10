@@ -1,7 +1,7 @@
 .{
     .name = .dotenv,
-    .fingerprint = 0xd19ca053c01f438a,
-    .version = "0.2.2",
+    .fingerprint = 0xd19ca053168df685,
+    .version = "0.3.0",
     .dependencies = .{},
     .minimum_zig_version = "0.16.0",
     .paths = .{
