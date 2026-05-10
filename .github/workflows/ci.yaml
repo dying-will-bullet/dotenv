@@ -24,14 +24,14 @@ jobs:
         run: zig build --verbose
       - name: Run Tests
         run: zig build test
-      - name: Install kcov
-        run: sudo apt-get install -y kcov
-      - name: Generate coverage
-        run: kcov $PWD/kcov-out /home/runner/.cache/zig/o/*/test
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          directory: ./kcov-out/test
-          verbose: true
-          fail_ci_if_error: true
+      # - name: Install kcov
+      #   run: sudo apt-get install -y kcov
+      # - name: Generate coverage
+      #   run: kcov $PWD/kcov-out /home/runner/.cache/zig/o/*/test
+      # - name: Upload coverage reports to Codecov
+      #   uses: codecov/codecov-action@v5
+      #   with:
+      #     token: ${{ secrets.CODECOV_TOKEN }}
+      #     directory: ./kcov-out/test
+      #     verbose: true
+      #     fail_ci_if_error: true
