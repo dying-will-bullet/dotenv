@@ -1,8 +1,5 @@
 const std = @import("std");
 
-const pkg_name = "dotenv";
-const pkg_path = "../src/lib.zig";
-
 const examples = .{
     "basic",
     "substitution",
@@ -12,6 +9,12 @@ const examples = .{
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    const dotenv_mod = b.createModule(.{
+        .root_source_file = b.path("../src/lib.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
 
     inline for (examples) |e| {
         const example_path = e ++ "/main.zig";
@@ -25,14 +28,11 @@ pub fn build(b: *std.Build) void {
                 .root_source_file = b.path(example_path),
                 .target = target,
                 .optimize = optimize,
+                .imports = &.{
+                    .{ .name = "dotenv", .module = dotenv_mod },
+                },
             }),
         });
-        const mod = b.addModule("dotenv", .{
-            .root_source_file = b.path("../src/lib.zig"),
-            .target = target,
-            .optimize = optimize,
-        });
-        exe.root_module.addImport("dotenv", mod);
 
         b.installArtifact(exe);
 

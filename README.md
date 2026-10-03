@@ -10,11 +10,11 @@ Storing configuration in the environment separate from code is based on The
 
 This library is a Zig language port of [nodejs dotenv](https://github.com/motdotla/dotenv).
 
-Target Zig version: 0.16.0
+Target Zig version: 0.17.0
 
-## Zig 0.16 API
+## Zig 0.17 API
 
-Zig 0.16 no longer exposes process environment variables as mutable global state through the standard library.
+Zig 0.16+ no longer exposes process environment variables as mutable global state through the standard library.
 The recommended model is for the application to receive `std.process.Init` in `main`, then pass `init.io` and `init.environ_map` to dotenv.
 
 ```zig
